@@ -1,0 +1,6 @@
+{
+  "name": "OmniLab 3D — Virtual Science Laboratory",
+  "description": "Interactive 3D virtual science laboratory for 90 Physics, Chemistry, and Biology experiments with procedural Three.js apparatus, Web Audio synthesis, and step-by-step physical validation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

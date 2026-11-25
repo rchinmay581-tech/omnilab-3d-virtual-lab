@@ -1,0 +1,173 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(studentId) {
+      return isVerifiedUser() && request.auth.uid == studentId;
+    }
+
+    function isValidStudentProfile(data, studentId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'rollNumber', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'rollNumber', 'photoUrl', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == studentId
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 80
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 160
+        && data.email == request.auth.token.email
+        && data.rollNumber is string
+        && data.rollNumber.size() <= 32
+        && data.rollNumber.matches('^[a-zA-Z0-9_\\-\\.\\/ ]*$')
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 512))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidExamScoreMap(exam) {
+      return exam is map
+        && exam.keys().hasAll(['procedureMarks', 'calculationMarks', 'vivaMarks', 'totalMarks', 'safetyScore', 'mode', 'completedAt'])
+        && exam.keys().hasOnly(['procedureMarks', 'calculationMarks', 'vivaMarks', 'totalMarks', 'safetyScore', 'mode', 'completedAt'])
+        && exam.procedureMarks is number && exam.procedureMarks >= 0 && exam.procedureMarks <= 20
+        && exam.calculationMarks is number && exam.calculationMarks >= 0 && exam.calculationMarks <= 5
+        && exam.vivaMarks is number && exam.vivaMarks >= 0 && exam.vivaMarks <= 5
+        && exam.totalMarks is number && exam.totalMarks >= 0 && exam.totalMarks <= 30
+        && exam.safetyScore is number && exam.safetyScore >= 0 && exam.safetyScore <= 100
+        && exam.mode is string && exam.mode.size() <= 16 && (exam.mode == 'practice' || exam.mode == 'exam')
+        && exam.completedAt is string && exam.completedAt.size() <= 64;
+    }
+
+    function isValidGraphPointsList(points) {
+      return points is list
+        && points.size() <= 24
+        && (
+          points.size() == 0 ||
+          (
+            points[0] is map
+            && points[0].keys().hasAll(['x', 'y'])
+            && points[0].keys().hasOnly(['x', 'y', 'label'])
+            && points[0].x is number
+            && points[0].y is number
+            && (!('label' in points[0]) || (points[0].label is string && points[0].label.size() <= 40))
+          )
+        );
+    }
+
+    function isValidExperimentRecord(data, studentId, experimentId) {
+      return data.keys().hasAll(['studentId', 'experimentId', 'completed', 'observations', 'result', 'vivaScore', 'safetyScore', 'graphPoints', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['studentId', 'experimentId', 'completed', 'observations', 'result', 'vivaScore', 'safetyScore', 'examScore', 'graphPoints', 'createdAt', 'updatedAt'])
+        && isValidId(data.studentId)
+        && data.studentId == request.auth.uid
+        && data.studentId == studentId
+        && isValidId(data.experimentId)
+        && data.experimentId.size() >= 2
+        && data.experimentId.size() <= 40
+        && data.experimentId == experimentId
+        && data.completed is bool
+        && data.observations is map
+        && data.observations.size() <= 20
+        && data.result is string
+        && data.result.size() <= 100
+        && data.vivaScore is number && data.vivaScore >= 0 && data.vivaScore <= 5
+        && data.safetyScore is number && data.safetyScore >= 0 && data.safetyScore <= 100
+        && (!('examScore' in data) || isValidExamScoreMap(data.examScore))
+        && isValidGraphPointsList(data.graphPoints)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function studentExists(studentId) {
+      return exists(/databases/$(database)/documents/students/$(studentId));
+    }
+
+    match /students/{studentId} {
+      allow get: if isOwner(studentId) && isValidId(studentId);
+      allow list: if false;
+
+      allow create: if isOwner(studentId)
+        && isValidId(studentId)
+        && isValidStudentProfile(incoming(), studentId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(studentId)
+        && isValidId(studentId)
+        && isValidStudentProfile(incoming(), studentId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'rollNumber', 'photoUrl', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /experiments/{experimentId} {
+        allow get: if isOwner(studentId)
+          && isValidId(studentId)
+          && isValidId(experimentId)
+          && studentExists(studentId);
+
+        allow list: if isOwner(studentId)
+          && isValidId(studentId)
+          && resource.data.studentId == request.auth.uid;
+
+        allow create: if isOwner(studentId)
+          && isValidId(studentId)
+          && isValidId(experimentId)
+          && isValidExperimentRecord(incoming(), studentId, experimentId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && studentExists(studentId);
+
+        allow update: if isOwner(studentId)
+          && isValidId(studentId)
+          && isValidId(experimentId)
+          && isValidExperimentRecord(incoming(), studentId, experimentId)
+          && incoming().studentId == existing().studentId
+          && incoming().experimentId == existing().experimentId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && studentExists(studentId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['observations', 'result', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['graphPoints', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'vivaScore', 'safetyScore', 'examScore', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'observations', 'result', 'vivaScore', 'safetyScore', 'examScore', 'graphPoints', 'updatedAt'])
+          );
+
+        allow delete: if isOwner(studentId)
+          && isValidId(studentId)
+          && isValidId(experimentId)
+          && studentExists(studentId);
+      }
+    }
+  }
+}

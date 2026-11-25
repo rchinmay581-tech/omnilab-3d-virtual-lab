@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "StudentProfile": {
+      "title": "StudentProfile",
+      "description": "Private student account profile linked to verified Google sign-in.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the student.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Student display name shown in the lab header and printable record.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified student email address.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "rollNumber": {
+          "type": "string",
+          "description": "Optional school or college roll number / registration ID.",
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-\\.\\/ ]*$"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional profile avatar URL from Google Auth.",
+          "maxLength": 512
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when student profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest profile update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "rollNumber",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ExperimentRecord": {
+      "title": "ExperimentRecord",
+      "description": "Saved per-experiment progress, observations, viva marks, exam breakdown, and graph points for a student.",
+      "type": "object",
+      "properties": {
+        "studentId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "experimentId": {
+          "type": "string",
+          "description": "Experiment identifier (e.g. phy-1, chem-12, bio-30).",
+          "minLength": 2,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether the experiment verification succeeded."
+        },
+        "observations": {
+          "type": "object",
+          "description": "Map of observation field keys to recorded string values."
+        },
+        "result": {
+          "type": "string",
+          "description": "Recorded final calculated result string.",
+          "maxLength": 100
+        },
+        "vivaScore": {
+          "type": "number",
+          "description": "Viva-voce score (0 to 5)."
+        },
+        "safetyScore": {
+          "type": "number",
+          "description": "Lab safety compliance percentage (0 to 100)."
+        },
+        "examScore": {
+          "type": "object",
+          "description": "Optional 30-mark practical exam breakdown object."
+        },
+        "graphPoints": {
+          "type": "array",
+          "description": "Up to 24 plotted graph data points."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update."
+        }
+      },
+      "required": [
+        "studentId",
+        "experimentId",
+        "completed",
+        "observations",
+        "result",
+        "vivaScore",
+        "safetyScore",
+        "graphPoints",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": {
+        "$ref": "#/entities/StudentProfile"
+      },
+      "description": "Private student profile documents keyed by Firebase Auth UID."
+    },
+    "/students/{studentId}/experiments/{experimentId}": {
+      "schema": {
+        "$ref": "#/entities/ExperimentRecord"
+      },
+      "description": "Per-experiment lab records and progress owned by the student."
+    }
+  }
+}
